@@ -9,15 +9,15 @@
 // =================================================================================
 
 // --- DADOS DA SUA REDE WI-FI ---
-#define WIFI_SSID       "convidado"
-#define WIFI_PASSWORD   "12345678"
+#define WIFI_SSID       "NOME_DA_SUA_REDE_WIFI"
+#define WIFI_PASSWORD   "SENHA_DA_SUA_REDE_WIFI"
 
 // --- DADOS DO SEU BROKER LOCAL ---
 // !! SUBSTITUA PELO IP REAL DO SEU NOTEBOOK !!
-#define MQTT_SERVER_IP  "192.168.0.101" 
+#define MQTT_SERVER_IP  "192.168.xxx.xxx" 
 #define MQTT_CLIENT_ID  "BitDoguinho_RP2040"
 
-// --- CREDENCIAIS DO BROKER ---
+// --- CREDENCIAIS DO BROKER SE FOI CONFIGURADO COM USUARIO E SENHA ---
 #define MQTT_USER       "user02"
 #define MQTT_PASSWORD   "147258369"
 
