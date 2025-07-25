@@ -28,6 +28,9 @@ set(PICO_BOARD pico_w CACHE STRING "Board type")
 # Pull in Raspberry Pi Pico SDK (must be before project)
 include(pico_sdk_import.cmake)
 
+# Pull in FreeRTOS
+include($ENV{FREERTOS_KERNEL_PATH}/portable/ThirdParty/GCC/RP2040/FreeRTOS_Kernel_import.cmake)
+
 project(testwithmqtt C CXX ASM)
 
 # Initialise the Raspberry Pi Pico SDK
@@ -58,6 +61,7 @@ target_link_libraries(testwithmqtt
         pico_cyw43_arch_lwip_threadsafe_background
         pico_lwip_mqtt
         hardware_adc
+        FreeRTOS-Kernel FreeRTOS-Kernel-Heap4
         )
 
 pico_add_extra_outputs(testwithmqtt)
