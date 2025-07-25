@@ -1,88 +1,100 @@
-# Projeto IoT com Pico W e MQTT: `testwithmqtt`
+# Projeto de IoT com MQTT e FreeRTOS na BitDogLab (RP2040)
 
-Este projeto demonstra a implementação de um dispositivo IoT utilizando a placa Raspberry Pi Pico W (compatível com BitDogLab) e o protocolo MQTT. O dispositivo é capaz de publicar dados de sensores e receber comandos para atuar em componentes locais, como um LED RGB.
+Este repositório contém o firmware para um dispositivo IoT desenvolvido na placa BitDogLab (baseada no microcontrolador RP2040) durante a residência em Sistemas Embarcados. O projeto implementa um cliente MQTT robusto que publica dados de sensores e recebe comandos para controlar periféricos, utilizando o FreeRTOS para gerir as tarefas de forma eficiente e concorrente.
 
-A comunicação é feita através de um broker MQTT rodando em uma rede local, permitindo o monitoramento e controle em tempo real através de qualquer cliente MQTT, como o MQTT Explorer.
+## Visão Geral
 
-## Funcionalidades Principais
-
-1.  **Publisher de Temperatura**:
-    * A placa lê a temperatura do seu sensor interno a cada 5 segundos.
-    * Publica o valor em graus Celsius no tópico MQTT: `Temp`.
-
-2.  **Subscriber de Controle de LED**:
-    * A placa se inscreve (assina) o tópico MQTT: `Led`.
-    * Aguarda por mensagens nesse tópico para controlar o LED RGB embutido.
-    * **Comandos:**
-        * `11`: Acende o LED na cor **Verde**.
-        * `12`: Acende o LED na cor **Azul**.
-        * `13`: Acende o LED na cor **Vermelho**.
-        * Qualquer outra mensagem apaga o LED.
+O objetivo principal deste projeto é criar um nó IoT funcional, capaz de:
+1.  **Ler** a temperatura do sensor interno do RP2040.
+2.  **Publicar** essa leitura de temperatura num tópico MQTT a intervalos regulares.
+3.  **Subscrever** um tópico MQTT para receber comandos.
+4.  **Controlar** um LED RGB com base nos comandos recebidos.
+5.  **Manter** uma conexão estável e reconectar-se automaticamente em caso de falha.
+6.  **Gerir** as tarefas de rede e de aplicação de forma independente usando FreeRTOS.
 
 ---
 
-## Requisitos de Hardware e Software
+## Evolução para FreeRTOS
 
-* **Hardware**:
-    * Placa Raspberry Pi Pico W ou compatível (ex: BitDogLab).
-    * Cabo Micro-USB.
-* **Software**:
-    * **Ambiente de Desenvolvimento**: [Pico C/C++ SDK](https://github.com/raspberrypi/pico-sdk) configurado.
-    * **Editor de Código**: Visual Studio Code com as extensões C/C++ e CMake Tools.
-    * **Broker MQTT**: Um broker rodando na mesma rede local que a placa. Ex: [Mosquitto](https://mosquitto.org/).
-    * **Cliente MQTT**: Um cliente para interagir com o broker. Ex: [MQTT Explorer](http://mqtt-explorer.com/).
+Inicialmente, o projeto foi desenvolvido com um único loop infinito (`while(true)`) na função `main()`. Embora funcional para tarefas simples, esta abordagem apresentava limitações de estabilidade e escalabilidade, especialmente em redes instáveis.
+
+Para criar um sistema mais robusto e profissional, o projeto foi migrado para utilizar o **FreeRTOS**, um Sistema Operacional de Tempo Real. Esta mudança trouxe os seguintes benefícios:
+
+* **Paralelismo Real**: Com os dois núcleos do RP2040, podemos dedicar um núcleo para as tarefas de rede e outro para as tarefas da aplicação.
+* **Organização e Modularidade**: O código foi dividido em tarefas independentes, cada uma com uma única responsabilidade.
+* **Estabilidade**: A gestão da rede numa tarefa dedicada com maior prioridade garante que a conexão MQTT permaneça estável, enquanto outras tarefas (como a leitura de sensores) rodam em paralelo sem interferir.
+* **Escalabilidade**: Adicionar novas funcionalidades (como ler outro sensor) torna-se tão simples quanto criar uma nova tarefa, sem comprometer as existentes.
+
+### Nova Arquitetura de Software
+
+A lógica agora está dividida em duas tarefas principais:
+
+1.  **`mqtt_task`**: A tarefa de infraestrutura. A sua única responsabilidade é gerir a conexão Wi-Fi e MQTT. Ela executa a função `cyw43_arch_poll()` constantemente e implementa a lógica de reconexão automática.
+2.  **`temp_publish_task`**: A tarefa de aplicação. "Acorda" a cada 5 segundos para ler o sensor de temperatura e solicitar a publicação dos dados.
+
+Para garantir que ambas as tarefas possam aceder ao cliente MQTT de forma segura, foi implementado um **Mutex (`SemaphoreHandle_t`)**, prevenindo condições de corrida e corrupção de dados.
 
 ---
+
+## Funcionalidades
+
+* **Publisher**: Publica a temperatura (em graus Celsius) no tópico `ha/bitdog/temp` a cada 5 segundos.
+* **Subscriber**: Subscreve o tópico `ha/bitdog/led/set` e aguarda por comandos para controlar o LED RGB.
+    * Payload `11`: Acende o LED **Verde**.
+    * Payload `12`: Acende o LED **Azul**.
+    * Payload `13`: Acende o LED **Vermelho**.
+    * Qualquer outro payload: Apaga o LED.
+* **Status de Conexão**: Publica a mensagem `online` no tópico `ha/bitdog/status` quando se conecta. Se a conexão cair, o broker publicará `offline` no mesmo tópico (graças ao *Last Will and Testament*).
+* **ID de Cliente Único**: Gera um ID de cliente único para o MQTT usando o endereço MAC do chip Wi-Fi para evitar conflitos de conexão.
+* **Modo de Performance Wi-Fi**: O modo de economia de energia do Wi-Fi é desativado para garantir a máxima estabilidade da conexão TCP.
+
+## Hardware
+
+* Placa de desenvolvimento **BitDogLab** (ou qualquer outra baseada no RP2040 com Wi-Fi, como a Raspberry Pi Pico W).
+* LED RGB integrado na placa.
+* Sensor de temperatura interno do RP2040.
+
+## Software e Ferramentas
+
+* **Linguagem**: C/C++
+* **SDK**: Raspberry Pi Pico C/C++ SDK
+* **Sistema Operacional**: FreeRTOS
+* **Ambiente de Desenvolvimento**: Visual Studio Code
+* **Broker MQTT**: Qualquer broker padrão (testado com Mosquitto e brokers públicos).
+* **Cliente de Teste**: MQTT Explorer ou uma aplicação móvel como o MQTT Client.
 
 ## Como Compilar e Usar
 
-1.  **Configuração do Projeto**:
-    * Clone ou baixe os arquivos deste projeto para uma pasta no seu computador.
-    * Abra o arquivo `testwithmqtt.c`.
-    * **Edite as seguintes linhas** com as suas informações:
-        ```c
-        // Altere para os dados da sua rede Wi-Fi
-        #define WIFI_SSID       "NOME_DA_SUA_REDE_WIFI"
-        #define WIFI_PASSWORD   "SENHA_DA_SUA_REDE_WIFI"
+1.  **Configurar o Ambiente**: Certifique-se de que tem o [Pico C/C++ SDK](https://github.com/raspberrypi/pico-sdk) e o [FreeRTOS](https://github.com/FreeRTOS/FreeRTOS-Kernel) configurados no seu ambiente de desenvolvimento.
 
-        // Altere para o endereço IP do computador onde o broker está rodando
-        #define MQTT_SERVER_IP  "IP_DO_SEU_NOTEBOOK" 
-        ```
+2.  **Clonar o Projeto**: Clone este repositório para a sua máquina.
 
-2.  **Compilação**:
-    * Abra um terminal (como o terminal do VS Code) na pasta raiz do projeto.
-    * Execute os seguintes comandos para compilar o código:
-        ```bash
-        mkdir build
-        cd build
-        cmake ..
-        make
-        ```
-    * Se a compilação for bem-sucedida, um arquivo chamado `testwithmqtt.uf2` será criado dentro da pasta `build`.
+3.  **Configurar o `CMakeLists.txt`**: Verifique se as bibliotecas necessárias estão incluídas no `target_link_libraries`:
+    ```cmake
+    target_link_libraries(nome_do_projeto PRIVATE
+        pico_stdlib
+        pico_cyw43_arch_lwip_threadsafe_background
+        pico_lwip_mqtt
+        hardware_adc
+        # Bibliotecas do FreeRTOS
+        FreeRTOS-Kernel
+        FreeRTOS-Kernel-Heap4 
+    )
+    ```
 
-3.  **Gravação na Placa**:
-    * Pressione e segure o botão `BOOTSEL` na sua Pico W.
-    * Conecte a placa ao seu computador via USB.
-    * Solte o botão `BOOTSEL`. A placa aparecerá como um dispositivo de armazenamento (como um pen drive).
-    * Arraste e solte o arquivo `testwithmqtt.uf2` para dentro desse dispositivo. A placa irá reiniciar automaticamente e começar a rodar o programa.
+4.  **Configurar o `main.c`**: Abra o ficheiro `main.c` e edite as seguintes macros com os seus dados:
+    * `WIFI_SSID`: Nome da sua rede Wi-Fi.
+    * `WIFI_PASSWORD`: Senha da sua rede Wi-Fi.
+    * `MQTT_SERVER_IP`: Endereço IP do seu broker MQTT.
+    * `MQTT_USER`: Utilizador do seu broker (se aplicável).
+    * `MQTT_PASSWORD`: Senha do seu broker (se aplicável).
 
----
+5.  **Compilar**: Crie uma pasta `build`, navegue até ela e execute os comandos:
+    ```bash
+    cmake ..
+    make
+    ```
 
-## Interação com o Dispositivo
+6.  **Gravar na Placa**: Coloque a BitDogLab em modo bootloader (segurando o botão `BOOTSEL` ao ligar o USB). Arraste o ficheiro `.uf2` gerado na pasta `build` para o dispositivo de armazenamento que aparece.
 
-1.  **Inicie o Broker MQTT** no seu notebook.
-2.  **Abra o MQTT Explorer** e conecte-se ao seu broker local (Host: `localhost` ou o IP do seu notebook, Porta: `1883`, Usuário: `user02`, Senha: `147258369`).
-3.  **Monitorar a Temperatura**:
-    * No MQTT Explorer, você verá o tópico `Temp` aparecer automaticamente.
-    * Clique nele para visualizar os valores de temperatura sendo enviados pela placa a cada 5 segundos.
-4.  **Controlar o LED**:
-    * No MQTT Explorer, vá para a seção de publicação.
-    * No campo `topic`, digite `Led`.
-    * No campo de `payload` (a mensagem), digite `11`, `12` ou `13` e clique em `Publish` para alterar a cor do LED na placa.
-
-## Estrutura do Projeto
-
-* `testwithmqtt.c`: O arquivo principal com toda a lógica da aplicação em C.
-* `CMakeLists.txt`: Arquivo de configuração do compilador (CMake) que define como o projeto é construído e quais bibliotecas do Pico SDK são necessárias.
-* `lwipopts.h`: Arquivo de configuração para a pilha de rede LwIP, ajustando parâmetros de rede.
-* `pico_sdk_import.cmake`: Script padrão do SDK para ajudar o CMake a localizar os arquivos do SDK.
+7.  **Monitorizar e Testar**: Abra um monitor serial para ver os logs da placa e use um cliente MQTT (como o MQTT Explorer) para ver as publicações de temperatura e enviar comandos para o LED.
